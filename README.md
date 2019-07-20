@@ -25,7 +25,7 @@ func main() {
 		}
     }()
     
-    // push results and close after done
+    // push payloads and close after done
 	go func() {
 		for i := 0; i < 100; i++ {
 			fn1.Push(i)
