@@ -21,7 +21,9 @@ func main() {
     // read results
 	go func() {
 		for res := range fn1.Results() {
-			println(res.(string))
+			// do something with results
+			println(res.Result.(string))
+			res.Done()
 		}
     }()
     
