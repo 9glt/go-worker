@@ -1,17 +1,17 @@
 package worker
 
 import (
-	"runtime"
 	"sync"
-	"sync/atomic"
 )
 
 // New pool
 func New() *Pool {
 	mu := &sync.Mutex{}
-	return &Pool{
-		0, make(chan Payload), make(chan struct{}), mu, sync.NewCond(mu), make(chan Results),
+	p := &Pool{
+		make(chan Payload), make(chan struct{}), mu, sync.NewCond(mu), make(chan Results), &sync.WaitGroup{},
 	}
+	p.wg.Add(1)
+	return p
 }
 
 type Results struct {
@@ -20,7 +20,7 @@ type Results struct {
 }
 
 func (r *Results) Done() {
-	atomic.AddInt32(&r.p.cnt, -1)
+	r.p.wg.Done()
 }
 
 // Payload interface
@@ -31,17 +31,17 @@ type Result interface{}
 
 // Pool .
 type Pool struct {
-	cnt      int32
 	ch       chan Payload
 	wait     chan struct{}
 	mu       *sync.Mutex
 	cond     *sync.Cond
 	resultCh chan Results
+	wg       *sync.WaitGroup
 }
 
 // Start function
 func (p *Pool) Start(fn func(Payload) Result, concurrency int) {
-	var wg sync.WaitGroup
+	wg := &sync.WaitGroup{}
 	for i := 0; i < concurrency; i++ {
 		wg.Add(1)
 		go func() {
@@ -56,20 +56,18 @@ func (p *Pool) Start(fn func(Payload) Result, concurrency int) {
 
 // Push payload
 func (p *Pool) Push(pl Payload) {
-	atomic.AddInt32(&p.cnt, 1)
+	p.wg.Add(1)
 	p.ch <- pl
 }
 
 // Close queue
 func (p *Pool) Close() {
-	atomic.AddInt32(&p.cnt, -1)
+	p.wg.Done()
 }
 
 // Wait to finish
 func (p *Pool) Wait() {
-	for atomic.LoadInt32(&p.cnt) > -1 {
-		runtime.Gosched()
-	}
+	p.wg.Wait()
 	close(p.ch)
 	close(p.resultCh)
 }
